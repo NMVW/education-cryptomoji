@@ -2,6 +2,7 @@
 
 const secp256k1 = require('secp256k1');
 const { randomBytes, createHash } = require('crypto');
+const { Buffer } = require('buffer');
 
 
 /**
@@ -14,8 +15,13 @@ const { randomBytes, createHash } = require('crypto');
  *   // 'e291df3eede7f0c520fddbe5e9e53434ff7ef3c0894ed9d9cbcb6596f1cfe87e'
  */
 const createPrivateKey = () => {
-  // Enter your solution here
+  let privKey;
+  do {
+    privKey = randomBytes(32)
+  } while (!secp256k1.privateKeyVerify(privKey))
 
+  const bf = Buffer.from(privKey);
+  return bf.toString('hex');
 };
 
 /**
@@ -32,8 +38,9 @@ const createPrivateKey = () => {
  *   not hex strings! You'll have to convert the private key.
  */
 const getPublicKey = privateKey => {
-  // Your code here
-
+  const bfPrivate = Buffer.from(privateKey, 'hex');
+  const bfPublic = secp256k1.publicKeyCreate(bfPrivate);
+  return bfPublic.toString('hex');
 };
 
 /**
@@ -50,8 +57,17 @@ const getPublicKey = privateKey => {
  *   not the message itself!
  */
 const sign = (privateKey, message) => {
-  // Your code here
 
+  // 1-way hash of message (cannot decrypt)
+  const hash = createHash('sha256');
+  hash.update(message);
+
+  const bfMessage = hash.digest();
+  const bfPrivate = Buffer.from(privateKey, 'hex');
+
+  // signature is function of hashed message and private key => unique identity
+  const sig = secp256k1.sign(bfMessage, bfPrivate);
+  return sig.signature.toString('hex');
 };
 
 /**
@@ -65,8 +81,17 @@ const sign = (privateKey, message) => {
  *   // false
  */
 const verify = (publicKey, message, signature) => {
-  // Your code here
+  // 1-way hash of message to identify any tampering!
+  const hash = createHash('sha256');
+  hash.update(message);
 
+  const bfMessage = hash.digest();
+
+  const bfSignature = Buffer.from(signature, 'hex');
+  const bfPublic = Buffer.from(publicKey, 'hex');
+
+  // NOTE: signature created from HASHED message, therefore need message as 32-bytes for verification
+  return secp256k1.verify(bfMessage, bfSignature, bfPublic);
 };
 
 module.exports = {

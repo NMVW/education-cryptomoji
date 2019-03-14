@@ -2,6 +2,7 @@
 
 const { createHash } = require('crypto');
 const signing = require('./signing');
+const { Transaction } = require('./blockchain');
 
 /**
  * A simple validation function for transactions. Accepts a transaction
@@ -11,8 +12,11 @@ const signing = require('./signing');
  *   - have been modified since signing
  */
 const isValidTransaction = transaction => {
-  // Enter your solution here
+  const positive = transaction.amount > 0;
 
+  // signature is made by source (sender)
+  const properSig = signing.verify(transaction.source, transaction.message, transaction.signature);
+  return positive && properSig;
 };
 
 /**
@@ -22,8 +26,20 @@ const isValidTransaction = transaction => {
  *   - they contain any invalid transactions
  */
 const isValidBlock = block => {
-  // Your code here
+  const currentHash = block.hash;
+  const validHash = block.calculateHash(block.nonce);
+  block.hash = currentHash; // do not want to mutate the BAD BLOCKS !
+  if (currentHash !== validHash) {
+    return false;
+  }
 
+  for (let i = 0; i < block.transactions.length; i++) {
+    if (!isValidTransaction(block.transactions[i])) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 /**
@@ -37,8 +53,27 @@ const isValidBlock = block => {
  *   - contains any invalid transactions
  */
 const isValidChain = blockchain => {
-  // Your code here
 
+  const hasGenesis = blockchain.getGenesisBlock().previousHash === null;
+  if (!hasGenesis) return false;
+
+  for (let b = 0, block = null, prevBlock = null; b < blockchain.blocks.length; b++) {
+    block = blockchain.blocks[b];
+
+    // check non-genesis blocks
+    if (b > 0) {
+      prevBlock = blockchain.blocks[b - 1];
+
+      // check any block has null previousHash
+      if (block.previousHash === null) return false;
+
+      // check any block has a previousHash !== prev block's hash?
+      if (block.previousHash !== prevBlock.hash) return false;
+    }
+
+    if (!isValidBlock(block)) return false;
+  }
+  return true;
 };
 
 /**
@@ -47,8 +82,8 @@ const isValidChain = blockchain => {
  * (in theory) make the blockchain fail later validation checks;
  */
 const breakChain = blockchain => {
-  // Your code here
-
+  const trans = new Transaction(signing.createPrivateKey(), 'yogi', -100);
+  blockchain.addBlock([trans]);
 };
 
 module.exports = {

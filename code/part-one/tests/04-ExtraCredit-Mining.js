@@ -11,7 +11,7 @@ const {
 } = require('../mining');
 
 
-describe.skip('Mining module', function() {
+describe('Mining module', function() {
 
   describe('MineableTransaction', function() {
     let signer = null;
@@ -179,7 +179,9 @@ describe.skip('Mining module', function() {
       const valid = new MineableTransaction(miner, recipient, reward);
       const block = new MineableBlock([valid], blockchain.getHeadBlock().hash);
       block.calculateHash(0);
+      console.log('invalid hash: ', block.hash);
       blockchain.blocks.push(block);
+      console.log('invalid chain: ', blockchain.blocks);
 
       expect(isValidMineableChain(blockchain)).to.be.false;
     });

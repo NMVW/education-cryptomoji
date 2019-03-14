@@ -17,9 +17,19 @@ class MineableTransaction {
    * then be set to `null`, while the _recipient_ becomes the public key of the
    * signer.
    */
-  constructor(privateKey, recipient = null, amount) {
-    // Enter your solution here
 
+  constructor(privateKey, recipient = null, amount) {
+    this.source = signing.getPublicKey(privateKey);
+    this.recipient = recipient;
+    this.amount = amount;
+
+    // mineable
+    if (recipient === null) {
+      this.recipient = this.source;
+      this.source = null;
+    }
+
+    this.signature = signing.sign(privateKey, (this.source ? this.source: '') + this.recipient + this.amount);
   }
 }
 
@@ -34,8 +44,9 @@ class MineableBlock extends Block {
    * become valid after it is mined.
    */
   constructor(transactions, previousHash) {
-    // Your code here
-
+    super(transactions, previousHash);
+    this.hash = null;
+    this.nonce = null;
   }
 }
 
@@ -61,9 +72,11 @@ class MineableChain extends Blockchain {
    *   You'll also need some sort of property to store pending transactions.
    *   This will only be used internally.
    */
-  constructor() {
-    // Your code here
-
+  constructor () {
+    super();
+    this.difficulty = 2;
+    this.reward = 3;
+    this._pendingTransactions = [];
   }
 
   /**
@@ -78,8 +91,7 @@ class MineableChain extends Blockchain {
    * mineable transaction and simply store it until it can be mined.
    */
   addTransaction(transaction) {
-    // Your code here
-
+    this._pendingTransactions.push(transaction);
   }
 
   /**
@@ -97,8 +109,21 @@ class MineableChain extends Blockchain {
    *   Don't forget to clear your pending transactions after you're done.
    */
   mine(privateKey) {
-    // Your code here
+    const rewardTransaction = new MineableTransaction(privateKey, null, this.reward);
+    const transactions = this._pendingTransactions.concat(rewardTransaction);
+    const newBlock = new MineableBlock(transactions, this.getHeadBlock().hash);
 
+    // fixed set of transactions, trying to snapshot a block (new transactions may be incoming for next block)
+    this._pendingTransactions = [];
+
+    let nonce = 0;
+    do {
+      newBlock.calculateHash(nonce);
+      nonce++;
+    } while (!_validHash(newBlock, this.difficulty))
+
+    // valid block hash! add to chain
+    this.blocks.push(newBlock);
   }
 }
 
@@ -117,10 +142,57 @@ class MineableChain extends Blockchain {
  *   - any public key that ever goes into a negative balance by sending
  *     funds they don't have
  */
-const isValidMineableChain = blockchain => {
-  // Your code here
+const isValidMineableChain = chain => {
 
+  // HEDERA: https://www.hedera.com/
+
+  const accountBalances = {}; // use object to de-dupe party keys
+  const chainLength = chain.blocks.length;
+  let blockLength = null;
+  let block = null;
+  let transaction = null;
+  let minerRewarded = false;
+
+  // valid blocks & transactions
+  for (let b = 0; b < chainLength - 1; b++) {
+
+    // 1) block checks
+    block = chain.blocks[ b ];
+
+    // exempt genesis block from hash check
+    if (block.previousHash !== null && !_validHash(block, chain.difficulty)) return false;
+    blockLength = block.transactions.length;
+    minerRewarded = false;
+
+    for (let t = 0; t < blockLength - 1; t++) {
+
+      // 2) transaction checks
+      transaction = block.transactions[ t ];
+
+      // duplicate reward for miner on block!
+      if (minerRewarded && transaction.source === null) return false;
+
+      // cheating for different reward!
+      if (transaction.source === null && (transaction.amount !== chain.reward)) return false;
+
+      // add parties to account balance ledger
+      if (transaction.source !== null) accountBalances[ transaction.source ] = transaction.source;
+      if (transaction.recipient !== null) accountBalances[ transaction.recipient ] = transaction.recipient;
+
+      // ah, reward the miner
+      minerRewarded = transaction.source === null;
+    }
+  }
+
+  // ledger balance accounting
+  for (let party in accountBalances) {
+    if (chain.getBalance(party) < 0) return false;
+  }
+
+  // if you made it this far, congrats
+  return true;
 };
+const _validHash = (block, prefix) => block.hash.slice(0, prefix) === '0'.repeat(prefix);
 
 module.exports = {
   MineableTransaction,

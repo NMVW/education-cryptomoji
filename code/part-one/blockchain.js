@@ -8,6 +8,7 @@ const signing = require('./signing');
  * A simple signed Transaction class for sending funds from the signer to
  * another public key.
  */
+
 class Transaction {
   /**
    * The constructor accepts a hex private key for the sender, a hex
@@ -22,8 +23,14 @@ class Transaction {
    *     other properties, signed with the provided private key
    */
   constructor(privateKey, recipient, amount) {
-    // Enter your solution here
+    this.source = signing.getPublicKey(privateKey);
+    this.recipient = recipient;
+    this.amount = amount;
+    this.signature = signing.sign(privateKey, this.source + this.recipient + this.amount);
+  }
 
+  get message () {
+    return this.source + this.recipient + this.amount;
   }
 }
 
@@ -44,8 +51,10 @@ class Block {
    *   - hash: a unique hash string generated from the other properties
    */
   constructor(transactions, previousHash) {
-    // Your code here
-
+    this.transactions = transactions;
+    this.previousHash = previousHash;
+    this.nonce = 33;
+    this.hash = this.calculateHash(this.nonce);
   }
 
   /**
@@ -58,8 +67,18 @@ class Block {
    *   properties change.
    */
   calculateHash(nonce) {
-    // Your code here
+    const { transactions, previousHash } = this;
 
+    // "hash salt"
+    this.nonce = nonce;
+
+    // collection of unique, signatures
+    let sigs = transactions.map(t => t.signature);
+
+    const newHash = sigs.join('') + previousHash + nonce;
+
+    this.hash = createHash('sha256').update(newHash).digest('hex');
+    return this.hash;
   }
 }
 
@@ -78,16 +97,17 @@ class Blockchain {
    *   - blocks: an array of blocks, starting with one genesis block
    */
   constructor() {
-    // Your code here
-
+    this.blocks = [new Block([], null)];
   }
 
   /**
    * Simply returns the last block added to the chain.
    */
   getHeadBlock() {
-    // Your code here
-
+    return this.blocks[this.blocks.length - 1];
+  }
+  getGenesisBlock() {
+    return this.blocks[0];
   }
 
   /**
@@ -95,8 +115,8 @@ class Blockchain {
    * adding it to the chain.
    */
   addBlock(transactions) {
-    // Your code here
-
+    const newBlock = new Block(transactions, this.getHeadBlock().hash);
+    this.blocks.push(newBlock);
   }
 
   /**
@@ -109,8 +129,16 @@ class Blockchain {
    *   we make the blockchain mineable later.
    */
   getBalance(publicKey) {
-    // Your code here
-
+    // TODO: include local ledger per block for given public key
+    // O(b * t)
+    const totalBalance = this.blocks.reduce((blockchainBalance, block) => {
+      return block.transactions.reduce((bal, t) => {
+        if (t.source === publicKey) bal -= t.amount; // gotta sell the house!
+        if (t.recipient === publicKey) bal += t.amount; // making bank!
+        return bal;
+      }, blockchainBalance);
+    }, 0);
+    return totalBalance;
   }
 }
 
